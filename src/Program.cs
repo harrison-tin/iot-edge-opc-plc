@@ -249,53 +249,62 @@ public static class Program
     /// </summary>
     private static async Task ConsoleServerAsync(CancellationToken cancellationToken)
     {
-        // init OPC configuration and tracing
-        var plcOpcApplicationConfiguration = new OpcApplicationConfiguration();
-        ApplicationConfiguration plcApplicationConfiguration = await plcOpcApplicationConfiguration.ConfigureAsync().ConfigureAwait(false);
+        int count = 5;
+        PlcServer[] serverList = new PlcServer[count];
+        PlcSimulation[] simList = new PlcSimulation[count];
+        for (int i = 0; i < count; i++) {
 
-        // start the server.
-        Logger.Information("Starting server on endpoint {endpoint} ...", plcApplicationConfiguration.ServerConfiguration.BaseAddresses[0]);
-        Logger.Information("Simulation settings are:");
-        Logger.Information("One simulation phase consists of {SimulationCycleCount} cycles", SimulationCycleCount);
-        Logger.Information("One cycle takes {SimulationCycleLength} ms", SimulationCycleLength);
-        Logger.Information("Reference test simulation: {addReferenceTestSimulation}",
-            AddReferenceTestSimulation ? "Enabled" : "Disabled");
-        Logger.Information("Simple events: {addSimpleEventsSimulation}",
-            AddSimpleEventsSimulation ? "Enabled" : "Disabled");
-        Logger.Information("Alarms: {addAlarmSimulation}", AddAlarmSimulation ? "Enabled" : "Disabled");
-        Logger.Information("Deterministic alarms: {deterministicAlarmSimulation}",
-            DeterministicAlarmSimulationFile != null ? "Enabled" : "Disabled");
+            // init OPC configuration and tracing
+            var plcOpcApplicationConfiguration = new OpcApplicationConfiguration();
+            ApplicationConfiguration plcApplicationConfiguration = await plcOpcApplicationConfiguration.ConfigureAsync().ConfigureAwait(false);
 
-        Logger.Information("Anonymous authentication: {anonymousAuth}", DisableAnonymousAuth ? "Disabled" : "Enabled");
-        Logger.Information("Username/Password authentication: {usernamePasswordAuth}", DisableUsernamePasswordAuth ? "Disabled" : "Enabled");
-        Logger.Information("Certificate authentication: {certAuth}", DisableCertAuth ? "Disabled" : "Enabled");
+            // start the server.
+            Logger.Information("Starting server on endpoint {endpoint} ...", plcApplicationConfiguration.ServerConfiguration.BaseAddresses[0]);
+            Logger.Information("Simulation settings are:");
+            Logger.Information("One simulation phase consists of {SimulationCycleCount} cycles", SimulationCycleCount);
+            Logger.Information("One cycle takes {SimulationCycleLength} ms", SimulationCycleLength);
+            Logger.Information("Reference test simulation: {addReferenceTestSimulation}",
+                AddReferenceTestSimulation ? "Enabled" : "Disabled");
+            Logger.Information("Simple events: {addSimpleEventsSimulation}",
+                AddSimpleEventsSimulation ? "Enabled" : "Disabled");
+            Logger.Information("Alarms: {addAlarmSimulation}", AddAlarmSimulation ? "Enabled" : "Disabled");
+            Logger.Information("Deterministic alarms: {deterministicAlarmSimulation}",
+                DeterministicAlarmSimulationFile != null ? "Enabled" : "Disabled");
 
-        PlcServer = new PlcServer(TimeService);
-        PlcServer.Start(plcApplicationConfiguration);
-        Logger.Information("OPC UA Server started");
+            Logger.Information("Anonymous authentication: {anonymousAuth}", DisableAnonymousAuth ? "Disabled" : "Enabled");
+            Logger.Information("Username/Password authentication: {usernamePasswordAuth}", DisableUsernamePasswordAuth ? "Disabled" : "Enabled");
+            Logger.Information("Certificate authentication: {certAuth}", DisableCertAuth ? "Disabled" : "Enabled");
 
-        PlcSimulation = new PlcSimulation(PlcServer);
-        PlcSimulation.Start();
+            PlcServer = new PlcServer(TimeService);
+            PlcServer.Start(plcApplicationConfiguration);
+            Logger.Information("OPC UA Server started {ServerPort}", ServerPort);
 
-        if (ShowPublisherConfigJsonIp)
-        {
-            await PnJsonHelper.PrintPublisherConfigJsonAsync(
-                PnJson,
-                $"{GetIpAddress()}:{ServerPort}{ServerPath}",
-                PluginNodes,
-                Logger).ConfigureAwait(false);
+            PlcSimulation = new PlcSimulation(PlcServer);
+            PlcSimulation.Start();
+
+            if (ShowPublisherConfigJsonIp)
+            {
+                await PnJsonHelper.PrintPublisherConfigJsonAsync(
+                    PnJson,
+                    $"{GetIpAddress()}:{ServerPort}{ServerPath}",
+                    PluginNodes,
+                    Logger).ConfigureAwait(false);
+            }
+            else if (ShowPublisherConfigJsonPh)
+            {
+                await PnJsonHelper.PrintPublisherConfigJsonAsync(
+                    PnJson,
+                    $"{Hostname}:{ServerPort}{ServerPath}",
+                    PluginNodes,
+                    Logger).ConfigureAwait(false);
+            }
+
+            Ready = true;
+            Logger.Information("PLC simulation started");
+            serverList[i] = PlcServer;
+            simList[i] = PlcSimulation;
+            ServerPort++;
         }
-        else if (ShowPublisherConfigJsonPh)
-        {
-            await PnJsonHelper.PrintPublisherConfigJsonAsync(
-                PnJson,
-                $"{Hostname}:{ServerPort}{ServerPath}",
-                PluginNodes,
-                Logger).ConfigureAwait(false);
-        }
-
-        Ready = true;
-        Logger.Information("PLC simulation started, press Ctrl+C to exit ...");
 
         // wait for Ctrl-C
 
@@ -311,8 +320,10 @@ public static class Program
         {
         }
 
-        PlcSimulation.Stop();
-        PlcServer.Stop();
+        for (int i = 0; i < count; i++) {
+            simList[i].Stop();
+            serverList[i].Stop();
+        }
     }
 
     /// <summary>
